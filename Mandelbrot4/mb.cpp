@@ -138,7 +138,7 @@ namespace MB
         static int imgHeightOld = 720;
         static int quality = 0; // Quality determines the number of passes
         static int max_passes = (int)pow(2, quality); // 2^quality passes when rendering
-        static std::vector<float*> vec_img_f;
+        static std::vector<float> vec_img_f;
         //static float* image_float = new float[imgWidth * imgHeight * 3]; // not used atm
         static GLuint texture; // OpenGL texture ID for displaying the fractal
         //bool ret = false; // ???
@@ -151,6 +151,11 @@ namespace MB
         // timing:
         static auto t1 = high_resolution_clock::now();
         static auto t2 = high_resolution_clock::now();
+        // threading stuff
+        static int current_passes = 0;
+        std::thread t;
+        static bool running = false;
+        static std::mutex m;
         // ======================================================================================
 
 
@@ -226,8 +231,23 @@ namespace MB
         if (ImGui::Button("Calculate"))
         {
             int max_iter = (int)max_iter_float; // TODO: this is dumb, fix it
-            calc_mb(center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, &texture, &imgSize[0], &imgSize[1]);
-            //calc_mb(center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, vec_img_f, &imgSize[0], &imgSize[1]);
+            //calc_mb(center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, &texture, &imgSize[0], &imgSize[1]);
+            t = std::thread(calc_mb, center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, &current_passes, &vec_img_f, &imgSize[0], &imgSize[1]);
+            running = true;
+            //cout << *vec_img_f.data() << "\n";
+            //cout << vec_img_f[0] <<   " " << sizeof(vec_img_f[0])     << "\n";
+            //cout << vec_img_f[1] <<   " " << sizeof(vec_img_f[1])     << "\n";
+            //cout << vec_img_f[200] << " " << sizeof(vec_img_f[200]) << "\n";
+
+        }
+
+        if (current_passes > max_passes && running)
+        {
+            t.join();
+            running = false;
+        }
+        else if (running) {
+            cout << "Not yet... passes at " << current_passes << "\n";
         }
 
         //ImGui::Spacing();
@@ -237,40 +257,48 @@ namespace MB
         ImGui::End();
 
 
-//        // MAIN DISPLAY REFRESH
-//        t2 = high_resolution_clock::now();
-//        auto ms_int = duration_cast<milliseconds>(t2 - t1);
-//        int duration = ms_int.count();
-//        if (duration >= 1000) // do this once a second only
-//        {
-//            t1 = high_resolution_clock::now();
-//
-//            if (imgWidth != imgWidthOld || imgHeight != imgHeightOld)
-//            {
-//                vec_img_f.resize(imgWidth * imgHeight * 3);
-//                imgWidthOld = imgWidth;
-//                imgHeightOld = imgHeight;
-//            }
-//            // MAKE TEXTURE FROM IMAGE DATA
-//            GLuint texture;
-//            // create texture to hold image data for rendering
-//            glGenTextures(1, &texture);
-//            glBindTexture(GL_TEXTURE_2D, texture);
-//
-//            // Setup filtering parameters for display
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-//            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
-//
-//            // Upload pixels into texture
-//#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
-//            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-//#endif
-//            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
-//            //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, &image_float[0]);
-//            cout << "Update tick, reset clock. Cycle took " << duration << " ms.\n";
-//        }
+        // MAIN DISPLAY REFRESH
+        t2 = high_resolution_clock::now();
+        auto ms_int = duration_cast<milliseconds>(t2 - t1);
+        int duration = ms_int.count();
+        if (duration >= 1000) // do this once a second only
+        {
+            t1 = high_resolution_clock::now();
+
+            if (imgWidth != imgWidthOld || imgHeight != imgHeightOld)
+            {
+                vec_img_f.resize(imgWidth * imgHeight * 3);
+                imgWidthOld = imgWidth;
+                imgHeightOld = imgHeight;
+            }
+            // MAKE TEXTURE FROM IMAGE DATA
+            // create texture to hold image data for rendering
+            glGenTextures(1, &texture);
+            glBindTexture(GL_TEXTURE_2D, texture);
+
+            // Setup filtering parameters for display
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
+
+            // Upload pixels into texture
+#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
+            m.lock(); // lock vec_img_f
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
+            m.unlock();
+            // debug printing, such good, much wow!
+            GLenum err;
+            while((err = glGetError()) != GL_NO_ERROR){
+            	std::cout << err;
+            }
+            cout << vec_img_f.data() << "\n";
+            
+            //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, &image_float[0]);
+            cout << "Update tick, reset clock. Cycle took " << duration << " ms.\n";
+        }
         // MAIN DISPLAY
         ImGui::Begin("Main Display", nullptr, ImGuiWindowFlags_HorizontalScrollbar);
         //ImGui::Begin("Main Display" );

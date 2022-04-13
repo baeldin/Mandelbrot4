@@ -212,8 +212,8 @@ void simple_func(const int wtf_some_value)
 }
 
 void calc_mb(real centerX, real centerY, double magn, const int max_iter, const float colorDensity, const float colorOffset, const int max_passes,
-	GLuint* out_texture, int* out_width, int* out_height)
-	//std::vector<float*> out_vec_img_f,
+	int* current_passes, std::vector<float>* out_vec_img_f, int* out_width, int* out_height, std::mutex m)
+	//GLuint* out_texture, 
 //void calc_mb_noargs(float* out_image_float, int* out_width, int* out_height, real centerX=0, real centerY=0, double magn=1, const int max_iter=250)
 
 {
@@ -258,6 +258,7 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 	// real x_offset = 0.f;
 	// real y_offset = 0.f;
 	std::ofstream fout("samples_256_tent.txt");
+	std::vector<float> vec_img_f(imgWidth * imgHeight * 3);
 
 
 
@@ -289,7 +290,27 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 				image[pixel_idx] = image[pixel_idx] + pixel_color;
 			}
 		}
+		float pass_fac = 1.f / (float)pass;
+		float pass_fac2 = ((float)pass - 1.f) / (float)(pass);
 		cout << "Pass " << pass << " complete.\n";
+		for (unsigned int i = 0; i < imgWidth * imgHeight; i++) {
+			color pixel = image[i] * sample_fac;
+			//image_sRGB[i] = { uint8_t((pixel.r) * 255), uint8_t((pixel.g) * 255), uint8_t((pixel.b) * 255) };
+			//fimage[3 * i + 0] = uint8_t((pixel.r) * 255);
+			//fimage[3 * i + 1] = uint8_t((pixel.g) * 255);
+			//fimage[3 * i + 2] = uint8_t((pixel.b) * 255);
+			//image_float[3 * i + 0] = pixel.r;
+			//image_float[3 * i + 1] = pixel.g;
+			//image_float[3 * i + 2] = pixel.b;
+			vec_img_f[3 * i + 0] = pass_fac2 * vec_img_f[3 * i + 0] + pass_fac * pixel.r;
+			vec_img_f[3 * i + 1] = pass_fac2 * vec_img_f[3 * i + 1] + pass_fac * pixel.g;
+			vec_img_f[3 * i + 2] = pass_fac2 * vec_img_f[3 * i + 2] + pass_fac * pixel.b;
+		}
+		m.lock();
+		*out_vec_img_f = vec_img_f;
+		if (pass < max_passes -1)
+			*current_passes = pass;
+		m.unlock();
 	}
 
 
@@ -301,47 +322,30 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 	fout.close();
 
 	std::vector<sRGBPixel> image_sRGB(imgWidth * imgHeight);
-	static float * image_float = new float[imgWidth * imgHeight * 3];
-	//std::vector<float> vec_img_f(imgWidth * imgHeight * 3);
+	//static float * image_float = new float[imgWidth * imgHeight * 3];
 	//std::vector<uint8_t> fimage(imgWidth * imgHeight * 3);
 
 	// write to file
-	{
-		for (unsigned int i = 0; i < imgWidth * imgHeight; i++) {
-			color pixel = image[i] * sample_fac;
-			//image_sRGB[i] = { uint8_t((pixel.r) * 255), uint8_t((pixel.g) * 255), uint8_t((pixel.b) * 255) };
-			//fimage[3 * i + 0] = uint8_t((pixel.r) * 255);
-			//fimage[3 * i + 1] = uint8_t((pixel.g) * 255);
-			//fimage[3 * i + 2] = uint8_t((pixel.b) * 255);
-			image_float[3 * i + 0] = pixel.r;
-			image_float[3 * i + 1] = pixel.g;
-			image_float[3 * i + 2] = pixel.b;
-			//vec_img_f[3 * i + 0] = pixel.r;
-			//vec_img_f[3 * i + 1] = pixel.g;
-			//vec_img_f[3 * i + 2] = pixel.b;
-		}
-		//stbi_write_png("test4.png", imgWidth, imgHeight, 3, &image_sRGB[0], imgWidth * 3);
-	}
 
 
-	// MAKE TEXTURE FROM IMAGE DATA
-	GLuint texture;
-	// create texture to hold image data for rendering
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-
-	// Setup filtering parameters for display
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
-
-	// Upload pixels into texture
-#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-#endif
-	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, &image_float[0]);
+//	// MAKE TEXTURE FROM IMAGE DATA
+//	GLuint texture;
+//	// create texture to hold image data for rendering
+//	glGenTextures(1, &texture);
+//	glBindTexture(GL_TEXTURE_2D, texture);
+//
+//	// Setup filtering parameters for display
+//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
+//
+//	// Upload pixels into texture
+//#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+//	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+//#endif
+//	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
+//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, &image_float[0]);
 
 	// debug printing, such good, much wow!
 	//GLenum err;
@@ -349,8 +353,12 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 	//	std::cout << err;
 	//}
 
-	//out_vec_img_f = vec_img_f;
-	*out_texture = texture;
+	m.lock();
+	*out_vec_img_f = vec_img_f;
+	//*out_texture = texture;
 	*out_width = imgWidth;
 	*out_height = imgHeight;
+
+	*current_passes = 9999999;
+	m.unlock();
 }
