@@ -212,8 +212,8 @@ void simple_func(const int wtf_some_value)
 }
 
 void calc_mb(real centerX, real centerY, double magn, const int max_iter, const float colorDensity, const float colorOffset, const int max_passes,
-	 std::vector<float*> out_vec_img_f, int* out_width, int* out_height)
-	//GLuint* out_texture,
+	GLuint* out_texture, int* out_width, int* out_height)
+	//std::vector<float*> out_vec_img_f,
 //void calc_mb_noargs(float* out_image_float, int* out_width, int* out_height, real centerX=0, real centerY=0, double magn=1, const int max_iter=250)
 
 {
@@ -226,8 +226,8 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 	const int num_threads = (int)std::thread::hardware_concurrency();
 #endif
 	//constexpr int imgMult = 80;
-	const int imgWidth = *out_width;
-	const int imgHeight = *out_height;
+	int imgWidth = *out_width;
+	int imgHeight = *out_height;
 	// constexpr int imgWidth = 3;
 	// constexpr int imgHeight = 3;
 	//const Complex center(-0.77, 0.125);
@@ -302,8 +302,8 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 
 	std::vector<sRGBPixel> image_sRGB(imgWidth * imgHeight);
 	static float * image_float = new float[imgWidth * imgHeight * 3];
-	std::vector<float> vec_img_f(imgWidth * imgHeight * 3);
-	std::vector<uint8_t> fimage(imgWidth * imgHeight * 3);
+	//std::vector<float> vec_img_f(imgWidth * imgHeight * 3);
+	//std::vector<uint8_t> fimage(imgWidth * imgHeight * 3);
 
 	// write to file
 	{
@@ -313,12 +313,12 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 			//fimage[3 * i + 0] = uint8_t((pixel.r) * 255);
 			//fimage[3 * i + 1] = uint8_t((pixel.g) * 255);
 			//fimage[3 * i + 2] = uint8_t((pixel.b) * 255);
-			//image_float[3 * i + 0] = pixel.r;
-			//image_float[3 * i + 1] = pixel.g;
-			//image_float[3 * i + 2] = pixel.b;
-			vec_img_f[3 * i + 0] = pixel.r;
-			vec_img_f[3 * i + 1] = pixel.g;
-			vec_img_f[3 * i + 2] = pixel.b;
+			image_float[3 * i + 0] = pixel.r;
+			image_float[3 * i + 1] = pixel.g;
+			image_float[3 * i + 2] = pixel.b;
+			//vec_img_f[3 * i + 0] = pixel.r;
+			//vec_img_f[3 * i + 1] = pixel.g;
+			//vec_img_f[3 * i + 2] = pixel.b;
 		}
 		//stbi_write_png("test4.png", imgWidth, imgHeight, 3, &image_sRGB[0], imgWidth * 3);
 	}
@@ -340,8 +340,8 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 #if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 #endif
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
-	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, &image_float[0]);
+	//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, &image_float[0]);
 
 	// debug printing, such good, much wow!
 	//GLenum err;
@@ -349,8 +349,8 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 	//	std::cout << err;
 	//}
 
-	out_vec_img_f = vec_img_f;
-	//*out_texture = texture;
+	//out_vec_img_f = vec_img_f;
+	*out_texture = texture;
 	*out_width = imgWidth;
 	*out_height = imgHeight;
 }
