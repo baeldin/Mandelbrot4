@@ -7,10 +7,13 @@
 #include <future>
 #include <mutex>
 
+
 // allow fout
 #pragma warning(disable : 4996)
 
 // mandelbrot includes
+
+
 #include "mandelbrot.h"
 #include "mb.h"
 
@@ -31,7 +34,7 @@ namespace MB
 {
     using real = double;
 
-    void RenderUI(SDL_Window* window, SDL_GLContext context)
+    void RenderUI()
     {
         static bool opt_fullscreen = true;
         static bool opt_padding = false;
@@ -141,6 +144,7 @@ namespace MB
         static std::vector<float> vec_img_f;
         //static float* image_float = new float[imgWidth * imgHeight * 3]; // not used atm
         static GLuint texture; // OpenGL texture ID for displaying the fractal
+        static bool need_texture = true;
         //bool ret = false; // ???
         static float colorDensity = 1.f;
         static float colorOffset = 0.f;
@@ -153,8 +157,9 @@ namespace MB
         static auto t2 = high_resolution_clock::now();
         // threading stuff
         static int current_passes = 0;
-        std::thread t;
+        static std::thread t;
         static bool running = false;
+        static bool stop = false;
         static std::mutex m;
         // ======================================================================================
 
@@ -228,27 +233,42 @@ namespace MB
         max_passes = (int)pow(2.0f, (float)quality);
         ImGui::Text("Render with %d passes", max_passes);
         // Press Start to Play:
-        if (ImGui::Button("Calculate"))
+        if (running)
         {
-            int max_iter = (int)max_iter_float; // TODO: this is dumb, fix it
-            //calc_mb(center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, &texture, &imgSize[0], &imgSize[1]);
-            t = std::thread(calc_mb, center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, &current_passes, &vec_img_f, &imgSize[0], &imgSize[1]);
-            running = true;
-            //cout << *vec_img_f.data() << "\n";
-            //cout << vec_img_f[0] <<   " " << sizeof(vec_img_f[0])     << "\n";
-            //cout << vec_img_f[1] <<   " " << sizeof(vec_img_f[1])     << "\n";
-            //cout << vec_img_f[200] << " " << sizeof(vec_img_f[200]) << "\n";
-
+            if (ImGui::Button("Stop"))
+            {
+                stop = true; // if this is encountered in loop, the thread calls exit(0)
+                running = false;
+            }
+        }
+        else
+        {
+            if (ImGui::Button("Calculate"))
+            {
+                int max_iter = (int)max_iter_float; // TODO: this is dumb, fix it
+                //calc_mb(center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, &texture, &imgSize[0], &imgSize[1]);
+                //cout << vec_img_f[0] << " " << vec_img_f[1] << "\n";
+                stop = false;
+                t = std::thread(calc_mb_onearg, center[0], center[1], magn, max_iter, colorDensity, colorOffset, &current_passes, max_passes, &vec_img_f, &imgSize[0], &imgSize[1], &stop, &m);
+                //t.join();
+                //t = std::thread(calc_mb_fewargs, &current_passes, &vec_img_f, &imgSize[0], &imgSize[1], m);
+                //t = std::thread(calc_mb, center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, &current_passes, &vec_img_f, &imgSize[0], &imgSize[1]);
+                //t = std::thread(simple_func, 47, &current_passes);
+                running = true;
+            }
         }
 
         if (current_passes > max_passes && running)
         {
             t.join();
             running = false;
+            current_passes = 0;
+            cout << "Joining t";
+
         }
-        else if (running) {
-            cout << "Not yet... passes at " << current_passes << "\n";
-        }
+        //else if (running) {
+        //    cout << "Not yet... passes at " << current_passes << "\n";
+        //}
 
         //ImGui::Spacing();
         //ImGui::Text("100\% Professional Debugging Stuff D:");
@@ -261,7 +281,7 @@ namespace MB
         t2 = high_resolution_clock::now();
         auto ms_int = duration_cast<milliseconds>(t2 - t1);
         int duration = ms_int.count();
-        if (duration >= 1000) // do this once a second only
+        if (duration >= 50) // do this once a second only
         {
             t1 = high_resolution_clock::now();
 
@@ -271,8 +291,14 @@ namespace MB
                 imgWidthOld = imgWidth;
                 imgHeightOld = imgHeight;
             }
+
             // MAKE TEXTURE FROM IMAGE DATA
             // create texture to hold image data for rendering
+            if (!need_texture)
+            {
+                glDeleteTextures(1, &texture);
+                need_texture = true;
+            }
             glGenTextures(1, &texture);
             glBindTexture(GL_TEXTURE_2D, texture);
 
@@ -285,19 +311,23 @@ namespace MB
             // Upload pixels into texture
 #if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
             glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+            need_texture = false;
 #endif
             m.lock(); // lock vec_img_f
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
             m.unlock();
+            need_texture = false;
+                //glBindTexture(1, texture);
+                //glTexSubImage2D(GL_TEXTURE_2D, 0, 0, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
+                ////glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, texture_data);
             // debug printing, such good, much wow!
             GLenum err;
             while((err = glGetError()) != GL_NO_ERROR){
             	std::cout << err;
             }
-            cout << vec_img_f.data() << "\n";
             
             //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, &image_float[0]);
-            cout << "Update tick, reset clock. Cycle took " << duration << " ms.\n";
+            //cout << "Update tick, reset clock. Cycle took " << duration << " ms.\n";
         }
         // MAIN DISPLAY
         ImGui::Begin("Main Display", nullptr, ImGuiWindowFlags_HorizontalScrollbar);
@@ -383,5 +413,6 @@ namespace MB
         
         ImGui::End(); // Main Display
         ImGui::End(); // Dockspace
+        ImGui::ShowDemoWindow();
 	}
 }

@@ -6,6 +6,7 @@
 #include <chrono>
 #include <tuple>
 #include <thread>
+#include <omp.h>
 #include <SDL_opengl.h>
 #include <SDL.h>
 #define STB_IMAGE_IMPLEMENTATION
@@ -93,22 +94,22 @@ color main_iter_loop2(const Complex z0, const float colorDensity, const float co
 	int iter = 0;
 	Complex z = z0;
 	real bailout = 1e10;
-	//int k = 0;
-	//real kmax = 0;
-	//Complex c(0, -0.1);
-	//real dkmax = 111;
+	int k = 0;
+	real kmax = 0;
+	Complex c(-0.1, 0);
+	real dkmax = 111;
 	while (z.abs_squared() <= bailout && iter < max_iter)
 	{
-	//	if (k < kmax)
-	//	{
+		if (k < kmax)
+		{
 		z = z * z + z0; // MB
-	//		k++;
-	//	}
-	//	else {
-	//		z = z * z + c * z * z + z0;
-	//		kmax = kmax + dkmax;
-	//		k = 0;
-	//	}
+			k++;
+		}
+		else {
+			z = z * z + c * z * z + z0;
+			kmax = kmax + dkmax;
+			k = 0;
+		}
 		iter++;
 	}
 
@@ -206,17 +207,35 @@ void save_to_png(const float *image_data, int imgWidth, const int imgHeight, con
 	
 }
 
-void simple_func(const int wtf_some_value)
+void simple_func(const int wtf_some_value, int* counter)
 {
-	cout << "Hello from simple func, you sent me " << wtf_some_value << "\n";
+	for (int i = 0; i < 5; i++) {
+		cout << "Hello from simple func, you sent me " << wtf_some_value << "\n";
+		*counter = i;
+		Sleep(1000);
+	}
+	*counter = 9999;
 }
 
-void calc_mb(real centerX, real centerY, double magn, const int max_iter, const float colorDensity, const float colorOffset, const int max_passes,
-	int* current_passes, std::vector<float>* out_vec_img_f, int* out_width, int* out_height, std::mutex m)
+//void calc_mb(real centerX, real centerY, double magn, const int max_iter, const float colorDensity, const float colorOffset, const int max_passes,
+//	int* current_passes, std::vector<float>* out_vec_img_f, int* out_width, int* out_height, std::mutex m)
 	//GLuint* out_texture, 
 //void calc_mb_noargs(float* out_image_float, int* out_width, int* out_height, real centerX=0, real centerY=0, double magn=1, const int max_iter=250)
 
+void calc_mb_onearg(real centerX, real centerY, const real magn, const int max_iter, const float colorDensity, const float colorOffset, 
+	int* current_passes, const int max_passes, std::vector<float>* out_vec_img_f, int* out_width, int* out_height, bool* stop, std::mutex* m)
 {
+	//std::vector<float> out_fec_img_f(3 * 1280 * 720);
+	//std::mutex m;
+//void calc_mb_fewargs(int* current_passes, std::vector<float>* out_vec_img_f, int* out_width, int* out_height, std::mutex m)
+	//real centerX = 0.;
+	//real centerY = 0.;
+	//double magn = 1.;
+	//const int max_iter = 250;
+	//const float colorDensity = 0.1;
+	//const float colorOffset = 0.;
+	//const int max_passes = 16;
+	
 #if _WIN32
 	SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
 #endif
@@ -225,9 +244,12 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 #else
 	const int num_threads = (int)std::thread::hardware_concurrency();
 #endif
+	omp_set_num_threads(num_threads);
 	//constexpr int imgMult = 80;
 	int imgWidth = *out_width;
 	int imgHeight = *out_height;
+	//int imgWidth = out_width;
+	//int imgHeight = out_height;
 	// constexpr int imgWidth = 3;
 	// constexpr int imgHeight = 3;
 	//const Complex center(-0.77, 0.125);
@@ -258,9 +280,10 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 	// real x_offset = 0.f;
 	// real y_offset = 0.f;
 	std::ofstream fout("samples_256_tent.txt");
-	std::vector<float> vec_img_f(imgWidth * imgHeight * 3);
+	std::vector<float> vec_img_f(imgWidth * imgHeight * 3, 0.f);
+	std::vector<bool> vec_img_pass(imgWidth * imgHeight); // use bool because it's tiny
 
-
+	volatile bool flag = false;
 
 	for (int pass = 0; pass < max_passes; pass++)
 	{
@@ -268,9 +291,12 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 		//real x_offset = pass*sample_fac - 0.5;
 		//real y_offset = halton(2, pass) - 0.5;
 		//cout << sample_fac << " " << x_offset << " " << y_offset << "\n";
+		float pass_fac = 1.f / ((float)pass + 1);
+		float pass_fac2 = (float)pass / ((float)pass + 1);
 		#pragma omp parallel for
 		for (int y = 0; y < imgHeight; y++) 
 		{
+			if (flag) continue;
 			for (int x = 0; x < imgWidth; x++) 
 			{
 				unsigned int pixel_idx = y * imgWidth + x;
@@ -288,31 +314,41 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 				// color pixel_color = aa_stress_test(z);
 				pixel_color = main_iter_loop2(z, colorDensity, colorOffset, max_iter);
 				image[pixel_idx] = image[pixel_idx] + pixel_color;
-			}
-		}
-		float pass_fac = 1.f / (float)pass;
-		float pass_fac2 = ((float)pass - 1.f) / (float)(pass);
-		cout << "Pass " << pass << " complete.\n";
-		for (unsigned int i = 0; i < imgWidth * imgHeight; i++) {
-			color pixel = image[i] * sample_fac;
-			//image_sRGB[i] = { uint8_t((pixel.r) * 255), uint8_t((pixel.g) * 255), uint8_t((pixel.b) * 255) };
-			//fimage[3 * i + 0] = uint8_t((pixel.r) * 255);
-			//fimage[3 * i + 1] = uint8_t((pixel.g) * 255);
-			//fimage[3 * i + 2] = uint8_t((pixel.b) * 255);
-			//image_float[3 * i + 0] = pixel.r;
-			//image_float[3 * i + 1] = pixel.g;
-			//image_float[3 * i + 2] = pixel.b;
-			vec_img_f[3 * i + 0] = pass_fac2 * vec_img_f[3 * i + 0] + pass_fac * pixel.r;
-			vec_img_f[3 * i + 1] = pass_fac2 * vec_img_f[3 * i + 1] + pass_fac * pixel.g;
-			vec_img_f[3 * i + 2] = pass_fac2 * vec_img_f[3 * i + 2] + pass_fac * pixel.b;
-		}
-		m.lock();
-		*out_vec_img_f = vec_img_f;
-		if (pass < max_passes -1)
-			*current_passes = pass;
-		m.unlock();
-	}
+				//vec_img_f[3 * pixel_idx + 0] += 0.003;
+				//vec_img_f[3 * pixel_idx + 1] += 0.003;
+				//vec_img_f[3 * pixel_idx + 2] += 0.003;
+				if (pass < 3 && pixel_idx < 3)
+				{
+					// cout << pixel_color.r << " " << pixel_color.g << " " << pixel_color.b << "\n";
+					//cout << vec_img_f[0] << " " << vec_img_f[1] << " " << vec_img_f[2] << " " << "\n";
+					cout << pass_fac2 << " * " << vec_img_f[3 * pixel_idx + 0] << " + " << pass_fac << " * " << pixel_color.r << " = " << pass_fac2 + vec_img_f[3 * pixel_idx + 0] + pass_fac * pixel_color.r << "\n";
 
+				}
+				vec_img_f[3 * pixel_idx + 0] = pass_fac2 * vec_img_f[3 * pixel_idx + 0] + pass_fac * pixel_color.r;
+				vec_img_f[3 * pixel_idx + 1] = pass_fac2 * vec_img_f[3 * pixel_idx + 1] + pass_fac * pixel_color.g;
+				vec_img_f[3 * pixel_idx + 2] = pass_fac2 * vec_img_f[3 * pixel_idx + 2] + pass_fac * pixel_color.b;
+			}
+			if (*stop) { flag = true; } // set skip flag to true when receiving STOP from main thread
+		}
+		if (*stop) { break; } // break loop at first occasion once the OMP section is done
+		cout << "First pass, pass = " << pass << " and the factors are " << pass_fac << " and " << pass_fac2 << "\n";
+		cout << "Pass " << pass << " complete.\n";
+		//for (unsigned int i = 0; i < imgWidth * imgHeight; i++) {
+		//	color pixel = image[i] * sample_fac;
+		//	//image_sRGB[i] = { uint8_t((pixel.r) * 255), uint8_t((pixel.g) * 255), uint8_t((pixel.b) * 255) };
+		//	//fimage[3 * i + 0] = uint8_t((pixel.r) * 255);
+		//	//fimage[3 * i + 1] = uint8_t((pixel.g) * 255);
+		//	//fimage[3 * i + 2] = uint8_t((pixel.b) * 255);
+		//	//image_float[3 * i + 0] = pixel.r;
+		//	//image_float[3 * i + 1] = pixel.g;
+		//	//image_float[3 * i + 2] = pixel.b;
+		//}
+		//m.lock();
+		if (pass < max_passes - 1)
+			*current_passes = pass;
+		*out_vec_img_f = vec_img_f;
+		//m.unlock();
+	}
 
 	auto t2 = high_resolution_clock::now();
 	/* Getting number of milliseconds as an integer. */
@@ -353,12 +389,12 @@ void calc_mb(real centerX, real centerY, double magn, const int max_iter, const 
 	//	std::cout << err;
 	//}
 
-	m.lock();
+	//m.lock();
 	*out_vec_img_f = vec_img_f;
-	//*out_texture = texture;
+	////*out_texture = texture;
 	*out_width = imgWidth;
 	*out_height = imgHeight;
 
 	*current_passes = 9999999;
-	m.unlock();
+	//m.unlock();
 }
