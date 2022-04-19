@@ -280,7 +280,7 @@ namespace MB
         if (ImGui::Button("Save to PNG"))
         {
             cout << "Saving to PNG\n";
-            save_to_png(&vec_img_f, imgWidth, imgHeight, png_out_name);
+            save_to_png(&vec_img_f, rendering.imgWidth, rendering.imgHeight, png_out_name);
         }
 
         if (current_passes > max_passes && running)
@@ -311,13 +311,13 @@ namespace MB
             t1 = high_resolution_clock::now();
             
             // has image size changed since last check? If so, update the vector
-            if (imgWidth != imgWidthOld || imgHeight != imgHeightOld)
+            if (rendering.imgWidth != imgWidthOld || rendering.imgHeight != imgHeightOld)
             {
-                vec_img_f.resize(imgWidth * imgHeight * 3);
+                vec_img_f.resize(rendering.imgWidth * rendering.imgHeight * 3);
                 std::fill(vec_img_f.begin(), vec_img_f.end(), 0);
                 //vec_img_f.clear();
-                imgWidthOld = imgWidth;
-                imgHeightOld = imgHeight;
+                imgWidthOld = rendering.imgWidth;
+                imgHeightOld = rendering.imgHeight;
             }
 
             // MAKE TEXTURE FROM IMAGE DATA
@@ -342,7 +342,7 @@ namespace MB
             need_texture = false;
 #endif
             m.lock(); // lock vec_img_f
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, rendering.imgWidth, rendering.imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
             m.unlock();
             need_texture = false;
                 //glBindTexture(1, texture);
