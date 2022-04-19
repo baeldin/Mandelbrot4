@@ -333,8 +333,6 @@ void calc_mb_onearg(const fractalPosition pos, const colorSettings cs, const ren
 	//constexpr real magn = 0.1;
 
 	real span = 1.5;
-	span = span / pos.magn;
-
 
 	const real sample_fac = 1.f / rendering.maxPasses;
 	auto t1 = high_resolution_clock::now();
