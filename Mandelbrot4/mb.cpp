@@ -141,10 +141,11 @@ namespace MB
         static int imgHeightOld = 720;
         static int quality = 0; // Quality determines the number of passes
         static int max_passes = (int)pow(2, quality); // 2^quality passes when rendering
-        static std::vector<float> vec_img_f;
+        static std::vector<float> vec_img_f(imgWidth * imgHeight * 3, 0);
         //static float* image_float = new float[imgWidth * imgHeight * 3]; // not used atm
         static GLuint texture; // OpenGL texture ID for displaying the fractal
         static bool need_texture = true;
+        static char png_out_name[64] = "frychtal.png";
         //bool ret = false; // ???
         static float colorDensity = 1.f;
         static float colorOffset = 0.f;
@@ -204,31 +205,33 @@ namespace MB
         ImGui::InputFloat("Color Density", &colorDensity);
         ImGui::InputFloat("Gradient Offset", &colorOffset);
         ImGui::Text("Transfer function");
-        const char* items[] = { "Linear", "Square", "Cube", "Square Root", "Cube Root", "Log" };
-        static int item_current_idx = 0; // Here we store our selection data as an index.
-        const char* combo_preview_value = items[item_current_idx];  // Pass in the preview value visible before opening the combo (it could be anything)
-        if (ImGui::BeginCombo("Transfer Function", combo_preview_value, 0)); //, flags))
-        {
-            for (int n = 0; n < IM_ARRAYSIZE(items); n++)
-            {
-                const bool is_selected = (item_current_idx == n);
-                if (ImGui::Selectable(items[n], is_selected))
-                    item_current_idx = n;
+        //const char* items[] = { "Linear", "Square", "Cube", "Square Root", "Cube Root", "Log" };
+        //static int item_current_idx = 0; // Here we store our selection data as an index.
+        //const char* combo_preview_value = items[item_current_idx];  // Pass in the preview value visible before opening the combo (it could be anything)
+        //if (ImGui::BeginCombo("Transfer Function", combo_preview_value, 0)); //, flags))
+        //{
+        //    for (int n = 0; n < IM_ARRAYSIZE(items); n++)
+        //    {
+        //        const bool is_selected = (item_current_idx == n);
+        //        if (ImGui::Selectable(items[n], is_selected))
+        //            item_current_idx = n;
 
-                // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
-                if (is_selected)
-                    ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
+        //        // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+        //        if (is_selected)
+        //            ImGui::SetItemDefaultFocus();
+        //    }
+        //    ImGui::EndCombo();
+        //}
         ImGui::End();
 
 
         ImGui::Begin("Rendering");
         // Quality Settings:
-        static int imgSize[2] = { 1280, 720 };
+        static int imgSize[2] = { imgWidth, imgHeight };
         ImGui::Text("Image Resolution");
         ImGui::InputInt2("input int2", imgSize);
+        imgWidth = imgSize[0];
+        imgHeight = imgSize[1];
         ImGui::DragInt("Render Quality:", &quality, 0.025, 0, 12, "Render Quality: %d", ImGuiSliderFlags_AlwaysClamp);
         max_passes = (int)pow(2.0f, (float)quality);
         ImGui::Text("Render with %d passes", max_passes);
@@ -256,6 +259,11 @@ namespace MB
                 //t = std::thread(simple_func, 47, &current_passes);
                 running = true;
             }
+            ImGui::InputText("Save name", png_out_name, IM_ARRAYSIZE(png_out_name));
+            if (ImGui::Button("Save to PNG"));
+            {
+                //save_to_png(vec_img_f, imgWidth, imgHeight, png_out_name);
+            }
         }
 
         if (current_passes > max_passes && running)
@@ -281,13 +289,17 @@ namespace MB
         t2 = high_resolution_clock::now();
         auto ms_int = duration_cast<milliseconds>(t2 - t1);
         int duration = ms_int.count();
-        if (duration >= 50) // do this once a second only
+        if (duration >= 50) // do this once every N ms only
         {
             t1 = high_resolution_clock::now();
 
+            // has image size changed since last check? If so, update the vector
             if (imgWidth != imgWidthOld || imgHeight != imgHeightOld)
             {
+                cout << "Size changed, resize the vector\n";
                 vec_img_f.resize(imgWidth * imgHeight * 3);
+                std::fill(vec_img_f.begin(), vec_img_f.end(), 0);
+                //vec_img_f.clear();
                 imgWidthOld = imgWidth;
                 imgHeightOld = imgHeight;
             }

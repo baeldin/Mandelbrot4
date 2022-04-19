@@ -31,6 +31,12 @@ public:
 		z0.y = y + z.y;
 		return z0;
 	}
+	constexpr ComplexNumber operator- (ComplexNumber const& z) {
+		ComplexNumber z0(0, 0);
+		z0.x = x - z.x;
+		z0.y = y - z.y;
+		return z0;
+	}
 	constexpr ComplexNumber operator* (const ComplexNumber& z) {
 		ComplexNumber z0(0, 0);
 		z0.x = x * z.x - y * z.y;
