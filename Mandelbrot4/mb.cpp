@@ -134,21 +134,21 @@ namespace MB
         static bool image_was_zoomed = false; // used for mouse wheel zoom in main display
         static float newXScroll = 0.; // used for mouse wheel zoom in main display
         static float newYScroll = 0.; // used for mouse wheel zoom in main display
+        static char mainDisplayString[50] = "Main Display (100\%)";
         // render settings
         static int imgWidth = 1280;
         static int imgHeight = 720;
-        static int imgWidthOld = 1280;
-        static int imgHeightOld = 720;
+        static int imgWidthOld = 1280; // used to detect changes in img size
+        static int imgHeightOld = 720; // used to detect changes in img size
         static int quality = 0; // Quality determines the number of passes
         static int max_passes = (int)pow(2, quality); // 2^quality passes when rendering
         static std::vector<float> vec_img_f(imgWidth * imgHeight * 3, 0);
-        //static float* image_float = new float[imgWidth * imgHeight * 3]; // not used atm
         static GLuint texture; // OpenGL texture ID for displaying the fractal
         static bool need_texture = true;
         static char png_out_name[64] = "frychtal.png";
-        //bool ret = false; // ???
         static float colorDensity = 1.f;
         static float colorOffset = 0.f;
+        static float progress = 1.f;
         // fix a weird offset when zooming:
         static int WeirdX = 1;
         static int WeirdY = 90;
@@ -166,6 +166,7 @@ namespace MB
 
 
         // CENTER SETTINGS + back and forth conversions for text > double and vice versa
+        static fractalPosition pos;
         ImGui::Text("Center:");
         ImGui::SameLine(); HelpMarker("Complex value of the point at the center of the image");
         ImGui::InputDouble("center real", &center[0]);
@@ -182,29 +183,43 @@ namespace MB
             center_slider_minima[1] = center[1] - 1.5 / magn;
             center_slider_maxima[1] = center[1] + 1.5 / magn;
         }
-
+        pos.center = Complex(center[0], center[1]);
         // Magnification Slider
+        ImGui::InputDouble("Magnification", &magn);
         ImGui::SliderScalar("Slider magn", ImGuiDataType_Double, &magn, &magn_slider_min, &magn_slider_max, "Magnification: %.10f", ImGuiSliderFlags_Logarithmic);
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
         {
             magn_slider_min = max(0.01 * magn, 0.00000000000001);
             magn_slider_max = 100 * magn;
         }
+        pos.magn = magn;
+        // Rotation
+        static double rotation = 0;
+        ImGui::InputDouble("Rotation", &rotation);
+        pos.rotation = Complex(cos(rotation / 180.f * 3.1415926f), sin(rotation / 180.f * 3.1415926f));
         // Max Iter Slider
+        ImGui::InputDouble("Max Iterations", &max_iter_float);
         ImGui::SliderScalar("slider max iter", ImGuiDataType_Double, &max_iter_float, &max_iter_float_slider_min, &max_iter_float_slider_max, "Max. Iterations: %0f", ImGuiSliderFlags_Logarithmic);
         if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
         {
             max_iter_float_slider_min = max(0.5 * max_iter_float, 1);
             max_iter_float_slider_max = 2 * max_iter_float;
         }
+        pos.maxIter = (int)max_iter_float;
         ImGui::End();
 
         
         // Coloring settings
         ImGui::Begin("Coloring");
+        static colorSettings colors;
         ImGui::InputFloat("Color Density", &colorDensity);
+        colors.colorDensity = colorDensity;
         ImGui::InputFloat("Gradient Offset", &colorOffset);
+        colors.colorOffset = colorOffset;
         ImGui::Text("Transfer function");
+        static bool repeat_gradient = true;
+        ImGui::Checkbox("Repeat Gradient", &repeat_gradient);
+        colors.repeat_gradient = repeat_gradient;
         //const char* items[] = { "Linear", "Square", "Cube", "Square Root", "Cube Root", "Log" };
         //static int item_current_idx = 0; // Here we store our selection data as an index.
         //const char* combo_preview_value = items[item_current_idx];  // Pass in the preview value visible before opening the combo (it could be anything)
@@ -222,18 +237,24 @@ namespace MB
         //    }
         //    ImGui::EndCombo();
         //}
+        static color insideColor(0, 0, 0);
+        ImGui::ColorEdit3("Inside Color:", (float*)&insideColor);
+        colors.insideColor = insideColor;
         ImGui::End();
 
 
         ImGui::Begin("Rendering");
         // Quality Settings:
+        static renderSettings rendering;
         static int imgSize[2] = { imgWidth, imgHeight };
         ImGui::Text("Image Resolution");
         ImGui::InputInt2("input int2", imgSize);
-        imgWidth = imgSize[0];
-        imgHeight = imgSize[1];
+        rendering.imgWidth = imgSize[0];
+        rendering.imgHeight = imgSize[1];
+        rendering.aspect = (float)rendering.imgWidth / (float)rendering.imgHeight;
         ImGui::DragInt("Render Quality:", &quality, 0.025, 0, 12, "Render Quality: %d", ImGuiSliderFlags_AlwaysClamp);
         max_passes = (int)pow(2.0f, (float)quality);
+        rendering.maxPasses = max_passes;
         ImGui::Text("Render with %d passes", max_passes);
         // Press Start to Play:
         if (running)
@@ -249,21 +270,17 @@ namespace MB
             if (ImGui::Button("Calculate"))
             {
                 int max_iter = (int)max_iter_float; // TODO: this is dumb, fix it
-                //calc_mb(center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, &texture, &imgSize[0], &imgSize[1]);
-                //cout << vec_img_f[0] << " " << vec_img_f[1] << "\n";
                 stop = false;
-                t = std::thread(calc_mb_onearg, center[0], center[1], magn, max_iter, colorDensity, colorOffset, &current_passes, max_passes, &vec_img_f, &imgSize[0], &imgSize[1], &stop, &m);
-                //t.join();
-                //t = std::thread(calc_mb_fewargs, &current_passes, &vec_img_f, &imgSize[0], &imgSize[1], m);
-                //t = std::thread(calc_mb, center[0], center[1], magn, max_iter, colorDensity, colorOffset, max_passes, &current_passes, &vec_img_f, &imgSize[0], &imgSize[1]);
-                //t = std::thread(simple_func, 47, &current_passes);
+                t = std::thread(calc_mb_onearg, pos, colors, rendering, &current_passes, &vec_img_f, &progress, &m);
                 running = true;
             }
-            ImGui::InputText("Save name", png_out_name, IM_ARRAYSIZE(png_out_name));
-            if (ImGui::Button("Save to PNG"));
-            {
-                //save_to_png(vec_img_f, imgWidth, imgHeight, png_out_name);
-            }
+        }
+        ImGui::ProgressBar(progress, ImVec2(0.0f, 0.0f));
+        ImGui::InputText("File name", png_out_name, IM_ARRAYSIZE(png_out_name));
+        if (ImGui::Button("Save to PNG"))
+        {
+            cout << "Saving to PNG\n";
+            save_to_png(&vec_img_f, imgWidth, imgHeight, png_out_name);
         }
 
         if (current_passes > max_passes && running)
@@ -292,11 +309,10 @@ namespace MB
         if (duration >= 50) // do this once every N ms only
         {
             t1 = high_resolution_clock::now();
-
+            
             // has image size changed since last check? If so, update the vector
             if (imgWidth != imgWidthOld || imgHeight != imgHeightOld)
             {
-                cout << "Size changed, resize the vector\n";
                 vec_img_f.resize(imgWidth * imgHeight * 3);
                 std::fill(vec_img_f.begin(), vec_img_f.end(), 0);
                 //vec_img_f.clear();
@@ -342,14 +358,18 @@ namespace MB
             //cout << "Update tick, reset clock. Cycle took " << duration << " ms.\n";
         }
         // MAIN DISPLAY
-        ImGui::Begin("Main Display", nullptr, ImGuiWindowFlags_HorizontalScrollbar);
+
+
+        sprintf(mainDisplayString, "Main Display (%.2f%%)###Main Display", 100.f * zoom_factor);
+        ImGui::Begin(mainDisplayString, nullptr, ImGuiWindowFlags_HorizontalScrollbar);
         //ImGui::Begin("Main Display" );
         ImVec2 ws = ImGui::GetWindowSize();
         ImVec2 wp = ImGui::GetWindowPos();
-        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImVec2 coursorPos = ImGui::GetCursorScreenPos();
         ImVec4 tint_col = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);   // No tint
         ImVec4 border_col = ImVec4(1.0f, 1.0f, 1.0f, 0.5f); // 50% opaque white
         prev_zoom_fac = zoom_factor;
+
         ImGui::Image((void*)(intptr_t)texture, ImVec2(zoom_factor * imgSize[0] , zoom_factor * imgSize[1])); // , texturesize);
         if (image_was_zoomed)
         {
@@ -372,16 +392,16 @@ namespace MB
             {
                 ImGui::BeginTooltip();
                 float region_sz = 32.0f;
-                float region_x = io.MousePos.x - pos.x - region_sz * 0.5f;
-                float region_y = io.MousePos.y - pos.y - region_sz * 0.5f;
+                float region_x = io.MousePos.x - coursorPos.x - region_sz * 0.5f;
+                float region_y = io.MousePos.y - coursorPos.y - region_sz * 0.5f;
                 float zoom = 4.0f;
                 if (region_x < 0.0f) { region_x = 0.0f; }
                 else if (region_x > imgWidth - region_sz) { region_x = imgWidth - region_sz; }
                 if (region_y < 0.0f) { region_y = 0.0f; }
                 else if (region_y > imgHeight - region_sz) { region_y = imgHeight - region_sz; }
-                ImGui::Text("Coursor pos on image is %.2f, %.2f", io.MousePos.x - pos.x, io.MousePos.y - pos.y);
+                ImGui::Text("Coursor pos on image is %.2f, %.2f", io.MousePos.x - coursorPos.x, io.MousePos.y - coursorPos.y);
                 ImGui::Text("Max scroll is: %.2f, %.2f", imgScrollMax.x, imgScrollMax.y);
-                ImGui::Text("Coursor pos on window is %.2f, %.2f", ws.x + io.MousePos.x - pos.y, ws.x + io.MousePos.y - pos.y);
+                ImGui::Text("Coursor pos on window is %.2f, %.2f", ws.x + io.MousePos.x - coursorPos.y, ws.x + io.MousePos.y - coursorPos.y);
                 ImGui::Text("Window content region: x %.2f, %.2f; y %.2f, %.2f, ", imgContentMin.x, imgContentMax.x - imgContentMin.x, 
                     imgContentMin.y, imgContentMax.y - imgContentMin.y);
                 ImGui::Text("Scroll values: %.2f/%.2f, %.2f/%.2f", imgScroll.x, imgScrollMax.x, imgScroll.y, imgScrollMax.y);
@@ -403,22 +423,27 @@ namespace MB
                     WeirdFac = -1;
                 }
                 zoom_factor = (display_magn > 0) ? display_magn + 1 : 1.f / (1.f - display_magn);
-                float coursorInImgX = io.MousePos.x - pos.x + WeirdFac * WeirdX;
-                float coursorInImgY = io.MousePos.y - pos.y + WeirdFac * WeirdY;
-                float coursorInImgWindowX = io.MousePos.x - pos.x - ImGui::GetScrollX();
-                float coursorInImgWindowY = io.MousePos.y - pos.y - ImGui::GetScrollY();
+                float coursorInImgX = io.MousePos.x - coursorPos.x + WeirdFac * WeirdX;
+                float coursorInImgY = io.MousePos.y - coursorPos.y + WeirdFac * WeirdY;
+                float coursorInImgWindowX = io.MousePos.x - coursorPos.x - ImGui::GetScrollX();
+                float coursorInImgWindowY = io.MousePos.y - coursorPos.y - ImGui::GetScrollY();
                 float zoom_ratio = zoom_factor / prev_zoom_fac;
                 newXScroll = (int)(coursorInImgX * zoom_ratio - (coursorInImgX - ImGui::GetScrollX()) + WeirdFac * WeirdX);
                 newYScroll = (int)(coursorInImgY * zoom_ratio - (coursorInImgY - ImGui::GetScrollY()) + WeirdFac * WeirdY);
                 cout << "Zoom factor new and old:     " << zoom_factor << " " << prev_zoom_fac << "\n";
-                cout << "Coursor position on image:   " << io.MousePos.x - pos.x << " " << io.MousePos.y - pos.y << "\n";
+                cout << "Coursor position on image:   " << io.MousePos.x - coursorPos.x << " " << io.MousePos.y - coursorPos.y << "\n";
                 cout << "Coursor position in window:  " << coursorInImgWindowX << " " << coursorInImgWindowY << "\n";
-                cout << "New coursor position on img: " << (io.MousePos.x - pos.x) * zoom_factor / prev_zoom_fac << " " << (io.MousePos.y - pos.y) * zoom_factor / prev_zoom_fac << "\n";
+                cout << "New coursor position on img: " << (io.MousePos.x - coursorPos.x) * zoom_factor / prev_zoom_fac << " " << (io.MousePos.y - coursorPos.y) * zoom_factor / prev_zoom_fac << "\n";
                 cout << "Old scroll values X and Y:   " << ImGui::GetScrollX() << " " << ImGui::GetScrollY() << "\n";
                 cout << "New scroll values X and Y:   " << newXScroll << " " << newYScroll << "\n";
                 cout << "Scroll values are now:       " << ImGui::GetScrollX() << " " << ImGui::GetScrollY() << "\n";
                 image_was_zoomed = true;
-                
+            }
+            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+            {
+                // move image by dragging if it is bigger than the window
+                ImGui::SetScrollX(ImGui::GetScrollX() - io.MouseDelta.x); //(int)mouse_drag.x);
+                ImGui::SetScrollY(ImGui::GetScrollY() - io.MouseDelta.y); //(int)mouse_drag.y);
             }
             prev_zoom_fac = zoom_factor;
         }

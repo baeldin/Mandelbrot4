@@ -177,6 +177,7 @@
     <ClInclude Include="..\..\..\..\..\..\imgui-docking\imstb_truetype.h" />
     <ClInclude Include="ComplexNumber.h" />
     <ClInclude Include="Gradient.h" />
+    <ClInclude Include="Settings.h" />
     <ClInclude Include="mandelbrot.h" />
     <ClInclude Include="mb.h" />
     <ClInclude Include="stb_image.h" />
