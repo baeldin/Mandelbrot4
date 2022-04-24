@@ -21,6 +21,6 @@ struct colorSettings
 	double colorDensity = 1.f;
 	double colorOffset = 0.f;
 	color insideColor = color(0,0,0);
-	Gradient gradient = volcano_under_a_glacier;
+	Gradient gradient = standard_muted;
 	bool repeat_gradient = true;
 };

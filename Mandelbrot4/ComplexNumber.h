@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include "color.h"
 
 using real = double;
 template <typename F>

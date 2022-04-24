@@ -104,7 +104,7 @@ color aa_stress_test(Complex z0)
 }
 
 
-color manowar_iter_loop(const Complex z0, const float colorDensity, const float colorOffset, const int max_iter)
+color manowar_iter_loop(const Complex z0, const colorSettings colors, const int max_iter)
 {
 	int iter = 0;
 	Complex z = z0;
@@ -119,14 +119,17 @@ color manowar_iter_loop(const Complex z0, const float colorDensity, const float 
 		iter++;
 	}
 
-	if (iter == max_iter) { return color(0, 0, 0); }
+	if (iter == max_iter) { return colors.insideColor; }
 
 	real il = 1.f / log(2.f);
 	real lp = log(log(bailout));
 	real illoglog = log(log(z.cabs())) * il;
 	real iterplus = (real)iter + lp * il - illoglog;
-	real gradient_float_index = 0.05f * (float)iterplus;
-	return uf_default.get_color(colorOffset + colorDensity * gradient_float_index);
+	real gradient_float_index = colors.colorOffset + colors.colorDensity * (0.05f * (float)iterplus);
+	if (!colors.repeat_gradient)
+		gradient_float_index = min(gradient_float_index, 1.f);
+	Gradient gradient = colors.gradient;
+	return gradient.get_color(gradient_float_index);
 }
 
 color main_iter_loop2(const Complex z0, const colorSettings colors, const int max_iter)
@@ -273,34 +276,9 @@ void save_to_png(std::vector<float>* image_data, int imgWidth, const int imgHeig
 	
 }
 
-void simple_func(const int wtf_some_value, int* counter)
-{
-	for (int i = 0; i < 5; i++) {
-		cout << "Hello from simple func, you sent me " << wtf_some_value << "\n";
-		*counter = i;
-		Sleep(1000);
-	}
-	*counter = 9999;
-}
-
-//void calc_mb(real centerX, real centerY, double magn, const int max_iter, const float colorDensity, const float colorOffset, const int max_passes,
-//	int* current_passes, std::vector<float>* out_vec_img_f, int* out_width, int* out_height, std::mutex m)
-	//GLuint* out_texture, 
-//void calc_mb_noargs(float* out_image_float, int* out_width, int* out_height, real centerX=0, real centerY=0, double magn=1, const int max_iter=250)
-
 void calc_mb_onearg(const fractalPosition pos, const colorSettings cs, const renderSettings rendering,
 	int* current_passes, std::vector<float>* out_vec_img_f, float* progress, std::mutex*)
 {
-	//std::vector<float> out_fec_img_f(3 * 1280 * 720);
-	//std::mutex m;
-//void calc_mb_fewargs(int* current_passes, std::vector<float>* out_vec_img_f, int* out_width, int* out_height, std::mutex m)
-	//real centerX = 0.;
-	//real centerY = 0.;
-	//double magn = 1.;
-	//const int max_iter = 250;
-	//const float colorDensity = 0.1;
-	//const float colorOffset = 0.;
-	//const int max_passes = 16;
 	
 #if _WIN32
 	SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
@@ -360,8 +338,8 @@ void calc_mb_onearg(const fractalPosition pos, const colorSettings cs, const ren
 				//}
 				Complex z = get_complex_coord(x_shifted, y_shifted, pos, span, rendering);
 				// color pixel_color = aa_stress_test(z);
-				color pixel_color = main_iter_loop2(z, cs, pos.maxIter);
-				// color pixel_color = manowar_iter_loop(z, colorDensity, colorOffset, max_iter);
+				// color pixel_color = main_iter_loop2(z, cs, pos.maxIter);
+				color pixel_color = manowar_iter_loop(z, cs, pos.maxIter);
 				(*out_vec_img_f)[3 * pixel_idx + 0] = pass_fac2 * (*out_vec_img_f)[3 * pixel_idx + 0] + pass_fac * pixel_color.r;
 				(*out_vec_img_f)[3 * pixel_idx + 1] = pass_fac2 * (*out_vec_img_f)[3 * pixel_idx + 1] + pass_fac * pixel_color.g;
 				(*out_vec_img_f)[3 * pixel_idx + 2] = pass_fac2 * (*out_vec_img_f)[3 * pixel_idx + 2] + pass_fac * pixel_color.b;

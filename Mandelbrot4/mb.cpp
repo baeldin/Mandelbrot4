@@ -88,7 +88,7 @@ namespace MB
         }
 
 
-
+        static bool showGradientEditor = false;
         if (ImGui::BeginMenuBar())
         {
             if (ImGui::BeginMenu("Options"))
@@ -106,6 +106,13 @@ namespace MB
                 if (ImGui::MenuItem("Flag: PassthruCentralNode", "", (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode) != 0, opt_fullscreen)) { dockspace_flags ^= ImGuiDockNodeFlags_PassthruCentralNode; }
                 ImGui::Separator();
 
+            }
+            if (ImGui::BeginMenu("Windows"))
+            {
+                if (ImGui::MenuItem("Gradient Editor", ""))
+                {
+                    showGradientEditor = (showGradientEditor) ? false : true;
+                }
             }
 
             ImGui::EndMenuBar();
@@ -149,6 +156,7 @@ namespace MB
         static float colorDensity = 1.f;
         static float colorOffset = 0.f;
         static float progress = 1.f;
+        static GLuint gradient_img;
         // fix a weird offset when zooming:
         static int WeirdX = 1;
         static int WeirdY = 90;
@@ -163,7 +171,6 @@ namespace MB
         static bool stop = false;
         static std::mutex m;
         // ======================================================================================
-
 
         // CENTER SETTINGS + back and forth conversions for text > double and vice versa
         static fractalPosition pos;
@@ -208,7 +215,7 @@ namespace MB
         pos.maxIter = (int)max_iter_float;
         ImGui::End();
 
-        
+
         // Coloring settings
         ImGui::Begin("Coloring");
         static colorSettings colors;
@@ -240,9 +247,62 @@ namespace MB
         static color insideColor(0, 0, 0);
         ImGui::ColorEdit3("Inside Color:", (float*)&insideColor);
         colors.insideColor = insideColor;
+        const char* items[] = { "UF Default", "UF Default Muted", "Volcano Under a Glacier", "Jet", "CBR_coldhot", "Default"};
+        static int current_gradient = 0;
+        static int previious_gradient = -1; // make sure that this is different initially
+        static std::vector<color> gradient_img_data(400 * 30, color(0));
+        static std::vector<Gradient> gradients = { uf_default, standard_muted, volcano_under_a_glacier, jet, CBR_coldhot, Gradient() };
+        ImGui::Combo("Gradent", &current_gradient, items, IM_ARRAYSIZE(items));
+        // if new gradient is selected:
+        static bool needGradientImg = true;
+        if (current_gradient != previious_gradient)
+        {
+            // fix memory leak (??)
+            if (!needGradientImg)
+            {
+                glDeleteTextures(1, &gradient_img);
+                needGradientImg = true;
+            }
+            colors.gradient = gradients[current_gradient];
+            gradient_img_data = colors.gradient.draw();
+            glGenTextures(1, &gradient_img);
+            glBindTexture(GL_TEXTURE_2D, gradient_img);
+
+            // Setup filtering parameters for display
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
+
+            // Upload pixels into texture
+#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, 400, 30, 0, GL_RGB, GL_FLOAT, gradient_img_data.data());
+            needGradientImg = false;
+        }
+        ImGui::Image((void*)(intptr_t)gradient_img, ImVec2(400, 30)); // , texturesize);
+        static float cidx = 0.5;
+        ImGui::DragFloat("Color Index", &cidx, 0.0002, 0.f, 1.f, "%.4f");
+        static color test_color = colors.gradient.get_color(cidx);
+        if (ImGui::Button("Get Color"))
+        {
+            test_color = colors.gradient.get_color(cidx);
+            cout << "Test color received: " << test_color.r << " " << test_color.g << " " << test_color.b << "\n";
+        }
+        if (ImGui::Button("Print Gradient"))
+        {
+            colors.gradient.print_fine();
+            colors.gradient.print();
+        }
         ImGui::End();
 
 
+        if (showGradientEditor)
+        {
+            ImGui::Begin("Gradient Editor");
+            ImGui::End();
+        }
         ImGui::Begin("Rendering");
         // Quality Settings:
         static renderSettings rendering;
@@ -289,16 +349,7 @@ namespace MB
             running = false;
             current_passes = 0;
             cout << "Joining t";
-
         }
-        //else if (running) {
-        //    cout << "Not yet... passes at " << current_passes << "\n";
-        //}
-
-        //ImGui::Spacing();
-        //ImGui::Text("100\% Professional Debugging Stuff D:");
-        //ImGui::SliderInt("Weird X offset", &WeirdX, -100, 100);
-        //ImGui::SliderInt("Weird Y offset", &WeirdY, -100, 100);
         ImGui::End();
 
 
@@ -320,6 +371,7 @@ namespace MB
                 imgHeightOld = rendering.imgHeight;
             }
 
+            // TODO: memory leak is fixed, but find a way to re-use texture instead of recreating it all the time... (bind, fill, or smth?)
             // MAKE TEXTURE FROM IMAGE DATA
             // create texture to hold image data for rendering
             if (!need_texture)
@@ -345,24 +397,15 @@ namespace MB
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, rendering.imgWidth, rendering.imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
             m.unlock();
             need_texture = false;
-                //glBindTexture(1, texture);
-                //glTexSubImage2D(GL_TEXTURE_2D, 0, 0, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, vec_img_f.data());
-                ////glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, texture_data);
-            // debug printing, such good, much wow!
             GLenum err;
             while((err = glGetError()) != GL_NO_ERROR){
             	std::cout << err;
             }
-            
-            //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, imgWidth, imgHeight, 0, GL_RGB, GL_FLOAT, &image_float[0]);
-            //cout << "Update tick, reset clock. Cycle took " << duration << " ms.\n";
         }
+
         // MAIN DISPLAY
-
-
         sprintf(mainDisplayString, "Main Display (%.2f%%)###Main Display", 100.f * zoom_factor);
         ImGui::Begin(mainDisplayString, nullptr, ImGuiWindowFlags_HorizontalScrollbar);
-        //ImGui::Begin("Main Display" );
         ImVec2 ws = ImGui::GetWindowSize();
         ImVec2 wp = ImGui::GetWindowPos();
         ImVec2 coursorPos = ImGui::GetCursorScreenPos();
@@ -381,8 +424,6 @@ namespace MB
         ImVec2 imgContentMin = ImGui::GetWindowContentRegionMin();
         ImVec2 imgScroll = { ImGui::GetScrollX(), ImGui::GetScrollY() };
         ImVec2 imgScrollMax = { ImGui::GetScrollMaxX(), ImGui::GetScrollMaxY() };
-        //ImGui::SetScrollX(500);
-        //ImGui::SetScrollY(500);
 
         // some fun ImGui example code:
         if (ImGui::IsItemHovered())

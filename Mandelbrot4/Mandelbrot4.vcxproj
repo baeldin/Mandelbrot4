@@ -133,14 +133,20 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <EnableParallelCodeGeneration>true</EnableParallelCodeGeneration>
+      <ConformanceMode>Default</ConformanceMode>
+      <MultiProcessorCompilation>
+      </MultiProcessorCompilation>
+      <EnableParallelCodeGeneration>
+      </EnableParallelCodeGeneration>
       <OpenMPSupport>true</OpenMPSupport>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <ExceptionHandling>false</ExceptionHandling>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <AdditionalOptions>/arch:AVX2 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -175,7 +181,9 @@
     <ClInclude Include="..\..\..\..\..\..\imgui-docking\imstb_rectpack.h" />
     <ClInclude Include="..\..\..\..\..\..\imgui-docking\imstb_textedit.h" />
     <ClInclude Include="..\..\..\..\..\..\imgui-docking\imstb_truetype.h" />
+    <ClInclude Include="color.h" />
     <ClInclude Include="ComplexNumber.h" />
+    <ClInclude Include="cubic_spline.h" />
     <ClInclude Include="Gradient.h" />
     <ClInclude Include="Settings.h" />
     <ClInclude Include="mandelbrot.h" />

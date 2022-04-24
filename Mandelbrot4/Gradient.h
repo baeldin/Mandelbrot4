@@ -3,45 +3,16 @@
 #include <cmath>
 #include <vector>
 
-using std::cout;
 
+#include "cubic_spline.h"
+
+
+using std::cout;
 using real = double;
 
 
 
-struct color {
-	float r, g, b;
-	color() : r(0), g(0), b(0) {};
-	color(float v_) {
-		r = v_;
-		g = v_;
-		b = v_;
-	}
-	color(float r_, float g_, float b_) {
-		r = r_;
-		g = g_;
-		b = b_;
-	}
-	void operator=(const color& c) {
-		r = c.r;
-		g = c.g;
-		b = c.b;
-	}
-	color operator+(const color& c) const {
-		color result;
-		result.r = r + c.r;
-		result.g = g + c.g;
-		result.b = b + c.b;
-		return result;
-	}
-	color operator*(const float s) const {
-		color result;
-		result.r = r * s;
-		result.g = g * s;
-		result.b = b * s;
-		return result;
-	}
-};
+
 
 
 class Gradient
@@ -50,16 +21,31 @@ private:
 	int length;
 	std::vector<color> colors;
 	std::vector<int> indices;
+	int fine_length = 500;
+	std::vector<color> fine_colors;
+	std::vector<int> fine_indices;
 public:
 	Gradient() {
 		length = 40;
 		colors = {color(0,0,0), color(1, 0,0), color(1,1,1), color(0.5f,0.5f,0.9f)};
 		indices = {0, 10, 20, 30};
+		fill();
 	}
 	Gradient(int length_, std::vector<color> colors_, std::vector<int> indices_) {
 		length = length_;
 		colors = colors_;
 		indices = indices_;
+		fill();
+	}
+	void fill()
+	{
+		fine_indices.resize(500);
+		fine_colors.resize(500);
+		for (int ii = 0; ii < 500; ii++)
+		{
+			fine_indices[ii] = ii;
+			fine_colors[ii] = get_color_cubic((float)ii / 500);
+		}
 	}
 	void print()
 	{
@@ -73,59 +59,142 @@ public:
 		}
 		cout << "=====================================\n";
 	}
+	void print_fine()
+	{
+		cout << "Printing gradient indices and colors:\n";
+		cout << "=====================================\n";
+		unsigned int ii = 0;
+		for (int idx : fine_indices)
+		{
+			cout << idx << ": (" << fine_colors[ii].r << ", " << fine_colors[ii].g << ", " << fine_colors[ii].b << ")\n";
+			ii++;
+		}
+		cout << "=====================================\n";
+	}
+
+	std::vector<color> draw()
+	{
+		// fill a small image with the gradient
+		std::vector<color> gradient_picture(400*30);
+		for (int ii = 0; ii < 400; ii++)
+		{
+			color current_color = get_color((float)ii / 400);
+			for (int jj = 0; jj < 30; jj++)
+			{
+				gradient_picture[400 * jj + ii] = current_color;
+			}
+		}
+		return gradient_picture;
+	}
+
 	color get_color(float xidx)
 	{
-		unsigned int ii = 0;
+		//cout << "Getting color\n";
+		unsigned int search_index = 0;
 		int lower_idx = 0;
 		int higher_idx = 0;
 		color lower_col, higher_col;
 		if (xidx > 1 || xidx < 0) {
 			xidx = xidx - floor(xidx);
 		}
-		float xidx_scaled = (float)this->length * xidx;
-		if (xidx_scaled < (float)indices[0])
+		float xidx_scaled = (float)this->fine_length * xidx;
+		if (xidx_scaled < (float)fine_indices[0])
 		{
-			lower_idx = indices.back() - length;
-			lower_col = colors.back();
-			higher_idx = indices[0];
-			higher_col = colors[0];
+			lower_idx = fine_indices.back() - length;
+			lower_col = fine_colors.back();
+			higher_idx = fine_indices[0];
+			higher_col = fine_colors[0];
 		}
-		else if (xidx_scaled > (float)indices.back())
+		else if (xidx_scaled > (float)fine_indices.back())
 		{
-			lower_idx = indices.back();
-			lower_col = colors.back();
-			higher_idx = indices[0] + length;
-			higher_col = colors[0];
+			lower_idx = fine_indices.back();
+			lower_col = fine_colors.back();
+			higher_idx = fine_indices[0] + length;
+			higher_col = fine_colors[0];
 		}
 		else
 		{
-			for (int idx : indices) 
+			for (int idx : fine_indices)
 			{
 
 				if (xidx_scaled == (float)idx)
 				{
-					return colors[(const unsigned __int64)ii];
+					//cout << "Perfect hit, xidx_scaled: " << xidx_scaled << ", idx: " << idx << "\n";
+					return fine_colors[(const unsigned __int64)search_index];
 				}
 				else if ((float)idx > xidx_scaled)
 				{
-					lower_idx = indices[ii-1];
-					lower_col = colors[ii-1];
-					higher_idx = indices[ii];
-					higher_col = colors[ii];
+					lower_idx = fine_indices[search_index - 1];
+					lower_col = fine_colors[search_index - 1];
+					higher_idx = fine_indices[search_index];
+					higher_col = fine_colors[search_index];
 					break;
 				}
-				ii++;
+				search_index++;
 			}
 
 		}
-		float idx_fac = (xidx_scaled - (float)lower_idx)/((float)higher_idx-(float)lower_idx);
+		//cout << "Linear fine indices: " << fine_indices[search_index - 1] << " " << fine_indices[search_index - 1] << "\n";
+		float idx_fac = (xidx_scaled - (float)lower_idx) / ((float)higher_idx - (float)lower_idx);
 		return color(
 			lower_col.r + idx_fac * (higher_col.r - lower_col.r),
 			lower_col.g + idx_fac * (higher_col.g - lower_col.g),
 			lower_col.b + idx_fac * (higher_col.b - lower_col.b));
 	}
+
+	// ONLY USED FOR INTIAL FILL
+	color get_color_cubic(float xidx)
+	{
+		int n_entries = indices.size();
+		unsigned int search_index = 0;
+		int next_index;
+		xidx = (xidx > 1 || xidx < 0) ? xidx - floor(xidx) : xidx;
+		float xidx_scaled = (float)this->length * xidx;
+		// TODO: add special case for 1 and 2 index gradients? This SHOULD not be necessary though
+		if (xidx_scaled < (float)indices[0] || xidx_scaled >(float)indices.back())
+		{
+			// if color demanded is between the last and first index
+			next_index = 0;
+		}
+		else
+		{
+			for (int idx : indices)
+			{
+				if (xidx_scaled == (float)idx)
+				{
+					// skip interpolation if index is hit exactly
+					return colors[(const unsigned __int64)search_index];
+				}
+				else if ((float)idx > xidx_scaled)
+				{
+					next_index = search_index;
+					break;
+				}
+				search_index++;
+			}
+
+		}
+		//cout << "Received request for " << xidx << " (scaled to " << xidx_scaled << ")\n";
+		//cout << "This is between " << indices[(search_index - 1) % n_entries] << " and " << indices[search_index] << "\n";
+		std::vector<float> spline_indices(4, 0);
+		std::vector<color> spline_colors(4, 0);
+		for (int jj = 0; jj < 4; jj++)
+		{ 
+			//cout << "Getting point " << jj << " at " << (search_index - 2 + jj) % n_entries << "\n";
+			spline_indices[jj] = (float)indices[(search_index - 2 + jj) % n_entries];
+			spline_colors[jj] = colors[(search_index - 2 + jj) % n_entries];
+			if (jj > 0) // make sure to cycle if the 4 indices contain the end and beginning
+				spline_indices[jj] = (spline_indices[jj - 1] > spline_indices[jj]) ? spline_indices[jj] + this->length : spline_indices[jj];
+		}
+		// do a check to make sure that xidx_scaled is between the 2nd and 3rd indices:
+		if (spline_indices[1] > xidx_scaled)
+			for (auto& element : spline_indices) { element -= this->length; }
+		//cout << "The 4 spline indices are: " << spline_indices[0] << " " << spline_indices[1] << " " << spline_indices[2] << " " << spline_indices[3] << "\n";
+		return splined_color(spline_indices, spline_colors, xidx_scaled);
+	}
 };
 
+// TODO: move this somewhere else
 // define gradients
 float col_div = 1.f/256.f;
 
@@ -147,7 +216,7 @@ std::vector<color> CBR_coldhot_colors{
 Gradient CBR_coldhot(CBR_oldhot_length, CBR_coldhot_colors, CBR_coldhot_indices);
 
 //jet:
-int jet_length = 64;
+int jet_length = 63;
 std::vector<int> jet_indices{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 	16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34,
 	35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,
