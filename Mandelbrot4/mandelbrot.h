@@ -110,11 +110,12 @@ color manowar_iter_loop(const Complex z0, const colorSettings colors, const int 
 	Complex z = z0;
 	Complex z1 = z;
 	Complex zold = z;
+	Complex c(0, -0.00020848082832);
 	real bailout = 128;
 	while (z.abs_squared() <= bailout && iter < max_iter)
 	{
 		zold = z;
-		z = zold * zold + z1 + z0;
+		z = zold * zold + z1 + c;
 		z1 = zold;
 		iter++;
 	}
@@ -314,8 +315,8 @@ void calc_mb_onearg(const fractalPosition pos, const colorSettings cs, const ren
 
 	const real sample_fac = 1.f / rendering.maxPasses;
 	auto t1 = high_resolution_clock::now();
-	std::atomic<int> pixel_count = 0;
-	int max_pixel_count = rendering.maxPasses * rendering.imgWidth * rendering.imgHeight;
+	std::atomic<long int> pixel_count = 0;
+	long int max_pixel_count = rendering.maxPasses * rendering.imgWidth * rendering.imgHeight;
 	for (int pass = 0; pass < rendering.maxPasses; pass++)
 	{
 		float pass_fac = 1.f / ((float)pass + 1);
@@ -338,14 +339,12 @@ void calc_mb_onearg(const fractalPosition pos, const colorSettings cs, const ren
 				//}
 				Complex z = get_complex_coord(x_shifted, y_shifted, pos, span, rendering);
 				// color pixel_color = aa_stress_test(z);
-				// color pixel_color = main_iter_loop2(z, cs, pos.maxIter);
-				color pixel_color = manowar_iter_loop(z, cs, pos.maxIter);
+				color pixel_color = main_iter_loop2(z, cs, pos.maxIter);
+				// color pixel_color = manowar_iter_loop(z, cs, pos.maxIter);
 				(*out_vec_img_f)[3 * pixel_idx + 0] = pass_fac2 * (*out_vec_img_f)[3 * pixel_idx + 0] + pass_fac * pixel_color.r;
 				(*out_vec_img_f)[3 * pixel_idx + 1] = pass_fac2 * (*out_vec_img_f)[3 * pixel_idx + 1] + pass_fac * pixel_color.g;
 				(*out_vec_img_f)[3 * pixel_idx + 2] = pass_fac2 * (*out_vec_img_f)[3 * pixel_idx + 2] + pass_fac * pixel_color.b;
-				//vec_img_f[3 * pixel_idx + 0] = pass_fac2 * vec_img_f[3 * pixel_idx + 0] + pass_fac * pixel_color.r;
-				//vec_img_f[3 * pixel_idx + 1] = pass_fac2 * vec_img_f[3 * pixel_idx + 1] + pass_fac * pixel_color.g;
-				//vec_img_f[3 * pixel_idx + 2] = pass_fac2 * vec_img_f[3 * pixel_idx + 2] + pass_fac * pixel_color.b;
+
 			}
 			pixel_count += rendering.imgWidth;
 			*progress = (float)pixel_count / (float)max_pixel_count;

@@ -20,25 +20,27 @@ public:
 		x(realPart),
 		y(imagPart)
 	{}
-	double real() { return x; }
-	double imag() { return y; }
+	constexpr double real() { return x; }
+	constexpr double imag() { return y; }
 	//double square() { return ComplexNumber<F>(x * x - y * y, 2 * x * y); }
-	ComplexNumber abs_components() { return ComplexNumber(abs(x), abs(y)); }
-	double cabs() { return sqrt(x * x + y * y); }
-	double abs_squared() { return x * x + y * y; }
-	constexpr ComplexNumber operator+ (ComplexNumber const &z) {
+	const ComplexNumber abs_components() { return ComplexNumber(abs(x), abs(y)); }
+	const ComplexNumber flip() { return ComplexNumber(y, x); }
+	const ComplexNumber conj() { return ComplexNumber(x, -y); }
+	constexpr double cabs() { return sqrt(x * x + y * y); }
+	constexpr double abs_squared() { return x * x + y * y; }
+	constexpr ComplexNumber operator+ (const ComplexNumber &z) {
 		ComplexNumber z0(0, 0);
 		z0.x = x + z.x;
 		z0.y = y + z.y;
 		return z0;
 	}
-	constexpr ComplexNumber operator- (ComplexNumber const& z) {
+	constexpr ComplexNumber operator- (const ComplexNumber &z) {
 		ComplexNumber z0(0, 0);
 		z0.x = x - z.x;
 		z0.y = y - z.y;
 		return z0;
 	}
-	constexpr ComplexNumber operator* (const ComplexNumber& z) {
+	constexpr ComplexNumber operator* (const ComplexNumber &z) {
 		ComplexNumber z0(0, 0);
 		z0.x = x * z.x - y * z.y;
 		z0.y = x * z.y + y * z.x;

@@ -175,21 +175,26 @@ public:
 
 		}
 		//cout << "Received request for " << xidx << " (scaled to " << xidx_scaled << ")\n";
-		//cout << "This is between " << indices[(search_index - 1) % n_entries] << " and " << indices[search_index] << "\n";
+		//cout << "Search Index: " << search_index << ", n_entries is " << n_entries << "\n";
+		//cout << "This is between " << indices[search_index] << " and " << indices[search_index] << "\n";
 		std::vector<float> spline_indices(4, 0);
 		std::vector<color> spline_colors(4, 0);
 		for (int jj = 0; jj < 4; jj++)
 		{ 
-			//cout << "Getting point " << jj << " at " << (search_index - 2 + jj) % n_entries << "\n";
-			spline_indices[jj] = (float)indices[(search_index - 2 + jj) % n_entries];
-			spline_colors[jj] = colors[(search_index - 2 + jj) % n_entries];
+			int fetch_index = search_index - 2 + jj;
+			fetch_index = (fetch_index < 0) ? fetch_index + n_entries : fetch_index;
+			//int fetch_index = (search_index - 2 + jj < 0) ? search_index - 2 + jj + n_entries : search_index - 2 + jj;
+			//cout << "Getting point " << jj << " at " << fetch_index << "(" << indices[fetch_index] << ")\n";
+			spline_indices[jj] = (float)indices[fetch_index % n_entries];
+			spline_colors[jj] = colors[fetch_index % n_entries];
 			if (jj > 0) // make sure to cycle if the 4 indices contain the end and beginning
 				spline_indices[jj] = (spline_indices[jj - 1] > spline_indices[jj]) ? spline_indices[jj] + this->length : spline_indices[jj];
 		}
+		// cout << "The 4 spline A indices are: " << spline_indices[0] << " " << spline_indices[1] << " " << spline_indices[2] << " " << spline_indices[3] << "\n";
 		// do a check to make sure that xidx_scaled is between the 2nd and 3rd indices:
 		if (spline_indices[1] > xidx_scaled)
 			for (auto& element : spline_indices) { element -= this->length; }
-		//cout << "The 4 spline indices are: " << spline_indices[0] << " " << spline_indices[1] << " " << spline_indices[2] << " " << spline_indices[3] << "\n";
+		// cout << "The 4 spline B indices are: " << spline_indices[0] << " " << spline_indices[1] << " " << spline_indices[2] << " " << spline_indices[3] << "\n";
 		return splined_color(spline_indices, spline_colors, xidx_scaled);
 	}
 };

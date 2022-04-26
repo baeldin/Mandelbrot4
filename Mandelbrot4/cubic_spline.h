@@ -89,11 +89,10 @@ std::vector<double> calculate_spline_coefficients(std::vector<float> x, std::vec
 color splined_color(std::vector<float> x, std::vector<color> colors, float index)
 {
 	//cout << "Received 4 indices and 4 colors:\n";
-	for (int ii = 0; ii < 4; ii++)
-	{
-		//cout << "index: " << x[ii] << " color: " << colors[ii].r << " " << colors[ii].g << " " << colors[ii].b << "\n";
-	}
-	color retColor(0, 0, 0);
+	//for (int ii = 0; ii < 4; ii++)
+	//{
+	//	cout << "index: " << x[ii] << " color: " << colors[ii].r << " " << colors[ii].g << " " << colors[ii].b << "\n";
+	//}
 	std::vector<double> coeffsRed = calculate_spline_coefficients(
 		x, { colors[0].r, colors[1].r, colors[2].r, colors[3].r });
 	std::vector<double> coeffsGreen = calculate_spline_coefficients(

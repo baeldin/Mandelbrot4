@@ -290,10 +290,16 @@ namespace MB
             test_color = colors.gradient.get_color(cidx);
             cout << "Test color received: " << test_color.r << " " << test_color.g << " " << test_color.b << "\n";
         }
+        ImGui::SameLine();
         if (ImGui::Button("Print Gradient"))
         {
             colors.gradient.print_fine();
             colors.gradient.print();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Refill"))
+        {
+            colors.gradient.fill();
         }
         ImGui::End();
 
